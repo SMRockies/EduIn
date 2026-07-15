@@ -7,8 +7,7 @@ import { visionPrompt } from "../prompts/vision.prompt.js";
 class AIService {
   async callOpenRouter(model, messages, options = {}) {
     const startTime = Date.now();
-    console.log("API Key exists:", !!getApiKey());
-    console.log("API Key prefix:", getApiKey()?.substring(0, 12));
+    
     console.log("Model:", model);
     const response = await fetch(`${openRouterConfig.baseUrl}/chat/completions`, {
       method: "POST",
