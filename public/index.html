@@ -16,8 +16,36 @@
       <h1>EduAI</h1>
       <p class="subtitle">AI Powered Learning Assistant</p>
       <p class="hero-text">
-        Ask questions, simplify topics, summarize notes, and generate quizzes instantly.
+        Ask questions, simplify topics, summarize notes, upload documents, and generate quizzes instantly.
       </p>
+    </section>
+
+    <section class="doc-card card">
+      <div class="doc-header">
+        <h2>Upload Document</h2>
+        <span id="docStatus" class="status-text">No file</span>
+      </div>
+      <div class="doc-upload-area">
+        <input type="file" id="fileInput" accept=".pdf,.docx,.xlsx" />
+        <label for="fileInput" class="file-label">Choose PDF, DOCX, or XLSX</label>
+        <button id="uploadBtn" class="primary-btn" disabled>Upload</button>
+      </div>
+      <div id="docInfo" class="doc-info hidden">
+        <div class="doc-meta">
+          <span id="docName"></span>
+          <span id="docWords"></span>
+          <span id="docPages"></span>
+        </div>
+      </div>
+      <div id="docActions" class="doc-actions hidden">
+        <button class="secondary-btn doc-action" data-action="summarize">Summarize</button>
+        <button class="secondary-btn doc-action" data-action="quiz">Generate Quiz</button>
+        <button class="secondary-btn doc-action" data-action="explain">Explain</button>
+        <div class="doc-qa">
+          <input type="text" id="questionInput" placeholder="Ask a question about the document..." />
+          <button id="askBtn" class="primary-btn">Ask</button>
+        </div>
+      </div>
     </section>
 
     <section class="workspace">
@@ -47,6 +75,6 @@
   </main>
 
   <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
-  <script src="script.js"></script>
+  <script type="module" src="events.js"></script>
 </body>
 </html>

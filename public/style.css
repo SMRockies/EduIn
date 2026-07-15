@@ -250,6 +250,107 @@ button:disabled {
   font-style: italic;
 }
 
+.doc-card {
+  margin-top: 22px;
+  padding: 24px;
+}
+
+.doc-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 16px;
+}
+
+.doc-header h2 {
+  margin: 0;
+  font-size: 1.2rem;
+}
+
+.doc-upload-area {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+#fileInput {
+  display: none;
+}
+
+.file-label {
+  display: inline-flex;
+  align-items: center;
+  padding: 13px 18px;
+  background: var(--secondary);
+  color: var(--primary-dark);
+  border-radius: 14px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: background 0.2s ease;
+  flex: 1;
+  min-width: 160px;
+}
+
+.file-label:hover {
+  background: #dce6ff;
+}
+
+.doc-info {
+  margin-top: 16px;
+  padding: 14px 18px;
+  background: #f0f7ff;
+  border-radius: 14px;
+  border: 1px solid #d0e2ff;
+}
+
+.doc-meta {
+  display: flex;
+  gap: 20px;
+  flex-wrap: wrap;
+  font-size: 0.95rem;
+  color: var(--text);
+}
+
+.doc-meta span {
+  font-weight: 600;
+}
+
+.doc-actions {
+  margin-top: 16px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  align-items: center;
+}
+
+.doc-qa {
+  display: flex;
+  gap: 10px;
+  flex: 1;
+  min-width: 200px;
+}
+
+.doc-qa input {
+  flex: 1;
+  border-radius: 14px;
+  border: 1px solid #c9d9ff;
+  padding: 12px 16px;
+  font: inherit;
+  color: var(--text);
+  outline: none;
+  background: #fdfdff;
+}
+
+.doc-qa input:focus {
+  border-color: var(--primary);
+  box-shadow: 0 0 0 4px rgba(37, 99, 235, 0.12);
+}
+
+.hidden {
+  display: none !important;
+}
+
 @media (max-width: 900px) {
   .workspace {
     grid-template-columns: 1fr;
