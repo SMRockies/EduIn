@@ -1,6 +1,5 @@
-import ExcelJS from "exceljs";
-
 export async function extractFromExcel(filePath) {
+  const ExcelJS = await import("exceljs");
   const workbook = new ExcelJS.Workbook();
   await workbook.xlsx.readFile(filePath);
 

@@ -26,7 +26,7 @@ function limitText(text, maxWords = 3000) {
 class DocumentService {
   async processUpload(file) {
     const ext = path.extname(file.originalname).replace(".", "").toLowerCase();
-    const extractor = getExtractor(file.mimetype, ext);
+    const extractor = await getExtractor(file.mimetype, ext);
 
     if (!extractor) {
       throw new Error(`UNSUPPORTED_FILE: No extractor for ${file.mimetype}`);

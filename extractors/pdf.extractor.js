@@ -1,7 +1,7 @@
 import fs from "fs";
-import { PDFParse } from "pdf-parse";
 
 export async function extractFromPdf(filePath) {
+  const { PDFParse } = await import("pdf-parse");
   const buffer = fs.readFileSync(filePath);
   const parser = new PDFParse({ verbosity: 0 });
   await parser.load(buffer);

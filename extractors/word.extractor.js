@@ -1,7 +1,7 @@
 import fs from "fs";
-import mammoth from "mammoth";
 
 export async function extractFromWord(filePath) {
+  const mammoth = await import("mammoth");
   const buffer = fs.readFileSync(filePath);
   const result = await mammoth.extractRawText({ buffer });
   return {
