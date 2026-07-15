@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>EduAI - AI Powered Learning Assistant</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <main class="app-shell">
+    <section class="hero">
+      <div class="hero-badge">SDG 4 - Quality Education</div>
+      <h1>EduAI</h1>
+      <p class="subtitle">AI Powered Learning Assistant</p>
+      <p class="hero-text">
+        Ask questions, simplify topics, summarize notes, and generate quizzes instantly.
+      </p>
+    </section>
+
+    <section class="workspace">
+      <div class="card input-card">
+        <label for="userInput">Enter your topic or notes</label>
+        <textarea id="userInput" placeholder="Type a topic, chapter, or notes here..."></textarea>
+        <div class="button-row">
+          <button id="askAiBtn" class="primary-btn">Ask AI</button>
+          <button id="summarizeBtn" class="secondary-btn">Summarize Notes</button>
+          <button id="quizBtn" class="secondary-btn">Generate Quiz</button>
+        </div>
+      </div>
+
+      <div class="card output-card">
+        <div class="card-header output-header">
+          <h2>Output</h2>
+          <div class="header-actions">
+            <span id="statusText" class="status-text">Ready</span>
+            <button id="copyBtn" class="copy-btn" type="button">Copy</button>
+          </div>
+        </div>
+        <div id="output" class="output-box output">
+          Your AI response will appear here.
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+  <script src="script.js"></script>
+</body>
+</html>
