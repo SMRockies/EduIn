@@ -1,18 +1,18 @@
+import pdfParse from "pdf-parse";
+
 export async function extractFromPdf(buffer) {
-  const { PDFParse } = await import("pdf-parse");
-  const parser = new PDFParse({ verbosity: 0 });
-  await parser.load(buffer);
-  const text = await parser.getText();
-  const info = await parser.getInfo();
-  parser.destroy();
-  return {
-    extractedText: text || "",
-    pages: info?.pages || info?.numPages || undefined,
-    metadata: {
-      author: info?.author || null,
-      title: info?.title || null,
-      subject: info?.subject || null,
-      keywords: info?.keywords || null
-    }
-  };
+  try {
+    const data = await pdfParse(buffer);
+
+    return {
+      extractedText: data.text || "",
+      pages: data.numpages || 0,
+      metadata: {
+        info: data.info || {},
+        metadata: data.metadata || {}
+      }
+    };
+  } catch (error) {
+    throw new Error(`Failed to parse PDF: ${error.message}`);
+  }
 }
