@@ -17,19 +17,20 @@ export async function uploadDocument(req, res, next) {
       message: `${doc.filename} processed successfully (${doc.wordCount} words)`
     }));
   } catch (error) {
-    if (req.file) {
-      const fs = await import("fs");
-      fs.unlink(req.file.path, () => {});
-    }
-
     if (error.message.startsWith("UNSUPPORTED_FILE:")) {
       return res.status(415).json(errorResponse(error.message.replace("UNSUPPORTED_FILE: ", ""), 415));
     }
     if (error.message.startsWith("PARSER_FAILED:")) {
-      return res.status(422).json(errorResponse(error.message.replace("PARSER_FAILED: ", ""), 422));
+      return res.status(422).json({
+        success: false,
+        error: "Unable to extract text from uploaded document."
+      });
     }
     if (error.message.startsWith("NO_TEXT:")) {
-      return res.status(422).json(errorResponse(error.message.replace("NO_TEXT: ", ""), 422));
+      return res.status(422).json({
+        success: false,
+        error: "Unable to extract text from uploaded document."
+      });
     }
     next(error);
   }

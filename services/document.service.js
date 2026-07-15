@@ -1,4 +1,3 @@
-import fs from "fs";
 import { getExtractor } from "../extractors/extractorFactory.js";
 import { Document } from "../utils/Document.js";
 import { aiService } from "./ai.service.js";
@@ -6,7 +5,6 @@ import { documentSummarizePrompt } from "../prompts/document/summarize.js";
 import { documentQuizPrompt } from "../prompts/document/quiz.js";
 import { documentExplainPrompt } from "../prompts/document/explain.js";
 import { documentQAPrompt } from "../prompts/document/qa.js";
-import path from "path";
 
 function cleanText(text) {
   return text
@@ -25,7 +23,11 @@ function limitText(text, maxWords = 3000) {
 
 class DocumentService {
   async processUpload(file) {
-    const ext = path.extname(file.originalname).replace(".", "").toLowerCase();
+    if (!file.buffer || file.buffer.length === 0) {
+      throw new Error("PARSER_FAILED: Empty file buffer");
+    }
+
+    const ext = file.originalname.split(".").pop()?.toLowerCase() || "";
     const extractor = await getExtractor(file.mimetype, ext);
 
     if (!extractor) {
@@ -34,7 +36,7 @@ class DocumentService {
 
     let result;
     try {
-      result = await extractor(file.path);
+      result = await extractor(file.buffer);
     } catch (err) {
       throw new Error(`PARSER_FAILED: Failed to parse ${file.originalname}: ${err.message}`);
     }
@@ -44,17 +46,13 @@ class DocumentService {
     }
 
     const cleaned = cleanText(result.extractedText);
-    const doc = new Document({
+    return new Document({
       filename: file.originalname,
       mimeType: file.mimetype,
       extractedText: cleaned,
       pages: result.pages,
       metadata: result.metadata
     });
-
-    fs.unlink(file.path, () => {});
-
-    return doc;
   }
 
   async summarize(doc) {

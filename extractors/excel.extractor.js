@@ -1,7 +1,7 @@
-export async function extractFromExcel(filePath) {
+export async function extractFromExcel(buffer) {
   const ExcelJS = await import("exceljs");
   const workbook = new ExcelJS.Workbook();
-  await workbook.xlsx.readFile(filePath);
+  await workbook.xlsx.load(buffer);
 
   const sheets = [];
   let totalRows = 0;
