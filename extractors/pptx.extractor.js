@@ -1,4 +1,7 @@
 import JSZip from "jszip";
+import { XMLParser } from "fast-xml-parser";
+
+const xmlParser = new XMLParser({ ignoreAttributes: false });
 
 export async function extractFromPptx(buffer) {
   let zip;
@@ -62,27 +65,38 @@ export async function extractFromPptx(buffer) {
   };
 }
 
-function extractTextFromSlideXml(xmlContent) {
-  const paragraphs = [];
-  const paragraphRegex = /<a:p\b[^>]*>([\s\S]*?)<\/a:p>/g;
-  let paragraphMatch;
+function extractTextFromSlideXml(xml) {
+  const doc = xmlParser.parse(xml);
+  const texts = [];
 
-  while ((paragraphMatch = paragraphRegex.exec(xmlContent)) !== null) {
-    const paragraphContent = paragraphMatch[1];
-    const textRuns = [];
-    const textRunRegex = /<a:t\b[^>]*>([^<]*)<\/a:t>/g;
-    let textMatch;
-
-    while ((textMatch = textRunRegex.exec(paragraphContent)) !== null) {
-      textRuns.push(textMatch[1]);
+  function walk(obj) {
+    if (typeof obj !== "object" || obj === null) return;
+    if (Array.isArray(obj)) {
+      obj.forEach(walk);
+      return;
     }
-
-    if (textRuns.length > 0) {
-      paragraphs.push(textRuns.join(""));
+    for (const [key, value] of Object.entries(obj)) {
+      if (key.startsWith("@_")) continue;
+      const localName = key.includes(":") ? key.split(":")[1] : key;
+      if (localName === "t" && typeof value === "string") {
+        texts.push(decodeEntities(value.trim()));
+      } else {
+        walk(value);
+      }
     }
   }
 
-  return paragraphs.join("\n");
+  walk(doc);
+  return texts.join("\n");
+}
+
+function decodeEntities(str) {
+  return str
+    .replace(/&amp;/g, "&")
+    .replace(/&lt;/g, "<")
+    .replace(/&gt;/g, ">")
+    .replace(/&#39;/g, "'")
+    .replace(/&quot;/g, '"');
 }
 
 async function extractPptxMetadata(zip) {
@@ -91,32 +105,34 @@ async function extractPptxMetadata(zip) {
   try {
     if (zip.files["docProps/core.xml"]) {
       const coreXml = await zip.files["docProps/core.xml"].async("text");
-      metadata.title =
-        extractXmlValue(coreXml, "dc:title") ||
-        extractXmlValue(coreXml, "title");
-      metadata.author =
-        extractXmlValue(coreXml, "dc:creator") ||
-        extractXmlValue(coreXml, "creator");
-      metadata.subject =
-        extractXmlValue(coreXml, "dc:subject") ||
-        extractXmlValue(coreXml, "subject");
+      const core = xmlParser.parse(coreXml);
+      metadata.title = findTextByLocalName(core, "title");
+      metadata.author = findTextByLocalName(core, "creator");
+      metadata.subject = findTextByLocalName(core, "subject");
     }
   } catch (e) {}
 
   try {
     if (zip.files["docProps/app.xml"]) {
       const appXml = await zip.files["docProps/app.xml"].async("text");
-      metadata.company = extractXmlValue(appXml, "Company");
+      const app = xmlParser.parse(appXml);
+      metadata.company = findTextByLocalName(app, "Company");
     }
   } catch (e) {}
 
   return metadata;
 }
 
-function extractXmlValue(xml, tag) {
-  const escapedTag = tag.replace(/:/g, "\\:");
-  const match = xml.match(
-    new RegExp(`<${escapedTag}[^>]*>([^<]*)<\\/${escapedTag}>`)
-  );
-  return match ? match[1].trim() : undefined;
+function findTextByLocalName(obj, localName) {
+  if (typeof obj !== "object" || obj === null) return undefined;
+  for (const [key, value] of Object.entries(obj)) {
+    if (key.startsWith("@_")) continue;
+    const name = key.includes(":") ? key.split(":")[1] : key;
+    if (name === localName && typeof value === "string") {
+      return value.trim();
+    }
+    const result = findTextByLocalName(value, localName);
+    if (result !== undefined) return result;
+  }
+  return undefined;
 }
