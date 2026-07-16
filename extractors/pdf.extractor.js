@@ -1,260 +1,180 @@
 import { createRequire } from "node:module";
-import { countCharacters, countWords, mergePageText, normalizeWhitespace } from "../utils/mergeText.js";
-import { extractPageText, loadPdfDocument, renderPdfPageToPngBuffer } from "../renderers/pdf.renderer.js";
+import {
+  buildMetadata,
+  countWords,
+  hasMeaningfulText,
+  countMeaningfulCharacters,
+  normalizeWhitespace,
+  withConcurrencyLimit
+} from "./pdf.helpers.js";
+import { loadPdfDocument, renderPdfPageToPngBuffer } from "../renderers/pdf.renderer.js";
 import { ocrService } from "../services/ocr.service.js";
 
 const require = createRequire(import.meta.url);
-const pdfParse = require("pdf-parse/lib/pdf-parse.js");
-
-const DIGITAL_WORD_THRESHOLD = 50;
-const DIGITAL_CHAR_THRESHOLD = 250;
-const PAGE_WORD_THRESHOLD = 20;
-const PAGE_CHAR_THRESHOLD = 120;
+const pdfParse = require("pdf-parse");
 const OCR_CONCURRENCY = 3;
+const PDF_MIN_TEXT_LENGTH = Number(process.env.PDF_MIN_TEXT_LENGTH ?? 100);
 
 export async function extractFromPdf(buffer) {
-  let pdfParseResult = null;
-  let pdfParseError = null;
+  const startedAt = Date.now();
+  console.log("PDF detected", { bytes: buffer?.length || 0 });
 
-  try {
-    pdfParseResult = await pdfParse(buffer);
-  } catch (error) {
-    pdfParseError = error;
+  const parsed = await tryParsePdf(buffer);
+  if (parsed.error) {
+    console.error("PDF Parse Error", parsed.error);
   }
 
-  const parsedText = normalizeWhitespace(pdfParseResult?.text || "");
-  const pages = pdfParseResult?.numpages || 0;
-  const metadata = extractPdfMetadata(pdfParseResult, pdfParseError);
-  const parsedWordCount = countWords(parsedText);
-  const parsedCharCount = countCharacters(parsedText);
-  const averageWordsPerPage = pages > 0 ? parsedWordCount / pages : parsedWordCount;
+  if (hasMeaningfulText(parsed.text, PDF_MIN_TEXT_LENGTH)) {
+    return completeExtraction({
+      extractedText: normalizeWhitespace(parsed.text),
+      pages: parsed.pages,
+      parser: "pdf-parse",
+      ocrUsed: false,
+      parserError: parsed.error?.message,
+      source: "digital",
+      processingTime: Date.now() - startedAt
+    });
+  }
 
-  if (parsedText && parsedWordCount >= DIGITAL_WORD_THRESHOLD && averageWordsPerPage >= PAGE_WORD_THRESHOLD) {
+  const ocr = await runPdfOCR(buffer, parsed.pages, parsed.error);
+  if (ocr.extractedText) {
+    return completeExtraction({
+      ...ocr,
+      processingTime: Date.now() - startedAt
+    });
+  }
+
+  console.error("Extraction failed", {
+    pages: ocr.pages,
+    parserError: ocr.parserError || parsed.error?.message || null
+  });
+
+  return {
+    extractedText: "",
+    pages: ocr.pages || parsed.pages || 0,
+    metadata: buildMetadata({
+      pages: ocr.pages || parsed.pages || 0,
+      ocrUsed: true,
+      parser: "failed",
+      wordCount: 0,
+      parserError: ocr.parserError || parsed.error?.message,
+      source: "ocr",
+      processingTime: Date.now() - startedAt
+    })
+  };
+}
+
+async function tryParsePdf(buffer) {
+  try {
+    const result = await pdfParse(buffer);
+    const text = normalizeWhitespace(result?.text || "");
+    const pages = result?.numpages || 0;
+
+    console.log("Parser succeeded", { pages });
+    console.log("Characters extracted", { characters: countMeaningfulCharacters(text) });
+
+    return { text, pages, error: null };
+  } catch (error) {
+    return { text: "", pages: 0, error };
+  }
+}
+
+async function runPdfOCR(buffer, fallbackPages, parserError) {
+  console.log("OCR started", { pages: fallbackPages || 0 });
+
+  let pdfDocument;
+  try {
+    pdfDocument = await loadPdfDocument(buffer);
+  } catch (error) {
+    console.error("OCR failed", error);
     return {
-      extractedText: parsedText,
-      pages,
-      metadata: {
-        ...metadata,
-        pages,
-        digitalPages: pages,
-        ocrPages: 0,
-        ocrUsed: false,
-        parser: "pdf-parse",
-        wordCount: parsedWordCount
-      }
+      extractedText: "",
+      pages: fallbackPages || 0,
+      parser: "ocr",
+      ocrUsed: true,
+      wordCount: 0,
+      parserError: parserError?.message || error.message,
+      source: "ocr"
     };
   }
 
   try {
-    const pdfDocument = await loadPdfDocument(buffer);
-    const totalPages = pdfDocument.numPages || pages || 0;
-    const pageResults = await processPdfPages(pdfDocument, totalPages);
-    const meaningfulResults = pageResults.filter((page) => page.digitalText.trim().length > 0 || page.ocrText.trim().length > 0);
-    const mergedText = normalizeWhitespace(pageResults.map((page) => page.text).join("\n\n"));
+    const pages = pdfDocument.numPages || fallbackPages || 0;
+    const pageNumbers = Array.from({ length: pages }, (_value, index) => index + 1);
+    const pageTexts = await withConcurrencyLimit(pageNumbers, OCR_CONCURRENCY, async (pageNumber) => {
+      const page = await pdfDocument.getPage(pageNumber);
+      try {
+        const imageBuffer = await renderPdfPageToPngBuffer(page);
+        const text = await ocrService.extractPdfPageText(imageBuffer);
+        return normalizeWhitespace(text);
+      } finally {
+        if (typeof page.cleanup === "function") {
+          page.cleanup();
+        }
+      }
+    });
 
+    const extractedText = normalizeWhitespace(pageTexts.filter(Boolean).join("\n\n"));
+    console.log("OCR finished", { pages, characters: countMeaningfulCharacters(extractedText) });
+
+    if (!extractedText) {
+      return {
+        extractedText: "",
+        pages,
+        parser: "ocr",
+        ocrUsed: true,
+        wordCount: 0,
+        parserError: parserError?.message,
+        source: "ocr"
+      };
+    }
+
+    return {
+      extractedText,
+      pages,
+      parser: "ocr",
+      ocrUsed: true,
+      wordCount: countWords(extractedText),
+      parserError: parserError?.message,
+      source: "ocr"
+    };
+  } catch (error) {
+    console.error("OCR failed", error);
+    return {
+      extractedText: "",
+      pages: pdfDocument.numPages || fallbackPages || 0,
+      parser: "ocr",
+      ocrUsed: true,
+      wordCount: 0,
+      parserError: parserError?.message || error.message,
+      source: "ocr"
+    };
+  } finally {
     if (typeof pdfDocument.destroy === "function") {
       await pdfDocument.destroy();
     }
-
-    if (meaningfulResults.length > 0 && mergedText) {
-      const digitalPages = pageResults.filter((page) => page.digitalText.trim().length > 0).length;
-      const ocrPages = pageResults.filter((page) => page.ocrAttempted).length;
-
-      return {
-        extractedText: mergedText,
-        pages: totalPages,
-        metadata: {
-          ...metadata,
-          pages: totalPages,
-          digitalPages,
-          ocrPages,
-          ocrUsed: ocrPages > 0,
-          parser: pdfParseResult ? "pdf-parse+pdfjs+vision" : "pdfjs+vision",
-          wordCount: countWords(mergedText)
-        }
-      };
-    }
-  } catch (hybridError) {
-    if (parsedText) {
-      return {
-        extractedText: parsedText,
-        pages,
-        metadata: {
-          ...metadata,
-          pages,
-          digitalPages: pages,
-          ocrPages: 0,
-          ocrUsed: false,
-          parser: "pdf-parse",
-          wordCount: parsedWordCount
-        }
-      };
-    }
-
-    try {
-      const fallback = await extractPdfViaVisionOnly(buffer);
-      if (fallback.extractedText) {
-        return fallback;
-      }
-    } catch {
-      // Fall through to the final fallback below.
-    }
-
-    return buildReadableFallback(metadata, pages, pdfParseError, hybridError);
   }
-
-  try {
-    const fallback = await extractPdfViaVisionOnly(buffer);
-    if (fallback.extractedText) {
-      return fallback;
-    }
-  } catch {
-    // Final fallback below.
-  }
-
-  if (parsedText) {
-    return {
-      extractedText: parsedText,
-      pages,
-      metadata: {
-        ...metadata,
-        pages,
-        digitalPages: pages,
-        ocrPages: 0,
-        ocrUsed: false,
-        parser: "pdf-parse",
-        wordCount: parsedWordCount
-      }
-    };
-  }
-
-  return buildReadableFallback(metadata, pages, pdfParseError);
 }
 
-async function processPdfPages(pdfDocument, totalPages) {
-  const pageIndexes = Array.from({ length: totalPages }, (_v, index) => index + 1);
-  return mapWithConcurrency(pageIndexes, OCR_CONCURRENCY, async (pageNumber) => {
-    const page = await pdfDocument.getPage(pageNumber);
-    const digitalText = await extractPageText(page).catch(() => "");
-    const digitalWordCount = countWords(digitalText);
-    const digitalCharCount = countCharacters(digitalText);
-    const needsOcr = digitalWordCount < PAGE_WORD_THRESHOLD || digitalCharCount < PAGE_CHAR_THRESHOLD;
-
-    let ocrText = "";
-    let ocrAttempted = false;
-    let ocrUsed = false;
-
-    if (needsOcr) {
-      ocrAttempted = true;
-      try {
-        const pngBuffer = await renderPdfPageToPngBuffer(page);
-        ocrText = await ocrService.extractPdfPageText(pngBuffer);
-        ocrUsed = Boolean(ocrText.trim());
-      } catch {
-        ocrText = "";
-      }
-    }
-
-    if (typeof page.cleanup === "function") {
-      page.cleanup();
-    }
-
-    return {
-      pageNumber,
-      digitalText,
-      ocrText,
-      ocrAttempted,
-      ocrUsed,
-      text: mergePageText(pageNumber, digitalText, ocrText)
-    };
-  });
-}
-
-async function extractPdfViaVisionOnly(buffer) {
-  const pdfDocument = await loadPdfDocument(buffer);
-  const totalPages = pdfDocument.numPages || 0;
-  const pageIndexes = Array.from({ length: totalPages }, (_v, index) => index + 1);
-  const pageResults = await mapWithConcurrency(pageIndexes, OCR_CONCURRENCY, async (pageNumber) => {
-    const page = await pdfDocument.getPage(pageNumber);
-    const pngBuffer = await renderPdfPageToPngBuffer(page);
-    const ocrText = await ocrService.extractPdfPageText(pngBuffer);
-
-    if (typeof page.cleanup === "function") {
-      page.cleanup();
-    }
-
-    return {
-      pageNumber,
-      digitalText: "",
-      ocrText,
-      ocrAttempted: true,
-      ocrUsed: Boolean(ocrText.trim()),
-      text: mergePageText(pageNumber, "", ocrText)
-    };
+function completeExtraction(result) {
+  console.log("Extraction completed", {
+    parser: result.parser,
+    pages: result.pages || 0,
+    wordCount: result.wordCount || countWords(result.extractedText || ""),
+    source: result.source || "digital"
   });
 
-  if (typeof pdfDocument.destroy === "function") {
-    await pdfDocument.destroy();
-  }
-
-  const extractedText = normalizeWhitespace(pageResults.map((page) => page.text).join("\n\n"));
-  const meaningfulResults = pageResults.filter((page) => page.digitalText.trim().length > 0 || page.ocrText.trim().length > 0);
-
   return {
-    extractedText: meaningfulResults.length > 0 && extractedText ? extractedText : "Unable to extract readable text.",
-      pages: totalPages,
-      metadata: {
-        pages: totalPages,
-        digitalPages: 0,
-        ocrPages: pageResults.filter((page) => page.ocrAttempted).length,
-        ocrUsed: true,
-        parser: "vision-only",
-        wordCount: countWords(extractedText)
-      }
+    extractedText: result.extractedText,
+    pages: result.pages || 0,
+    metadata: buildMetadata({
+      pages: result.pages || 0,
+      ocrUsed: result.ocrUsed,
+      parser: result.parser,
+      wordCount: result.wordCount || countWords(result.extractedText || ""),
+      parserError: result.parserError,
+      source: result.source || "digital",
+      processingTime: result.processingTime || 0
+    })
   };
-}
-
-function extractPdfMetadata(pdfParseResult, pdfParseError) {
-  const info = pdfParseResult?.info || {};
-  const metadata = pdfParseResult?.metadata || {};
-
-  return {
-    info,
-    metadata,
-    parserError: pdfParseError ? pdfParseError.message : undefined
-  };
-}
-
-function buildReadableFallback(metadata, pages, ...errors) {
-  const errorMessage = errors.filter(Boolean).map((error) => error?.message || String(error)).join(" | ");
-  return {
-    extractedText: "Unable to extract readable text.",
-    pages,
-    metadata: {
-      ...metadata,
-      pages,
-      digitalPages: 0,
-      ocrPages: 0,
-      ocrUsed: false,
-      parser: "failed",
-      wordCount: 0,
-      error: errorMessage || "Extraction failed"
-    }
-  };
-}
-
-async function mapWithConcurrency(items, limit, iterator) {
-  const results = new Array(items.length);
-  let index = 0;
-
-  const workers = Array.from({ length: Math.min(limit, items.length) }, async () => {
-    while (index < items.length) {
-      const currentIndex = index;
-      index += 1;
-      results[currentIndex] = await iterator(items[currentIndex], currentIndex);
-    }
-  });
-
-  await Promise.all(workers);
-  return results;
 }

@@ -1,5 +1,5 @@
 import { aiService } from "./ai.service.js";
-import { getModel } from "../config/openrouter.js";
+import { getOcrModel, getOcrProvider } from "../config/ocr.js";
 
 const PDF_OCR_PROMPT = [
   "Extract every readable word from this PDF page exactly as written.",
@@ -10,8 +10,17 @@ const PDF_OCR_PROMPT = [
 
 export class OcrService {
   async extractPdfPageText(imageBuffer) {
+    return this.runProvider(imageBuffer);
+  }
+
+  async runProvider(imageBuffer) {
+    const provider = getOcrProvider();
+    if (provider !== "openrouter") {
+      throw new Error(`Unsupported OCR provider: ${provider}`);
+    }
+
     const result = await aiService.callOpenRouter(
-      getModel("vision"),
+      getOcrModel(),
       [
         {
           role: "user",
