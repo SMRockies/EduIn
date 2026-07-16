@@ -9,7 +9,7 @@ export const upload = multer({
     if (isSupported(file.mimetype, ext)) {
       cb(null, true);
     } else {
-      cb(new Error(`UNSUPPORTED_FILE: ${file.mimetype} (${ext}) is not supported. Supported: PDF, DOCX, XLSX`));
+      cb(new Error(`UNSUPPORTED_FILE: ${file.mimetype} (${ext}) is not supported. Supported: PDF, DOCX, XLSX, PPTX`));
     }
   }
 });
