@@ -40,6 +40,7 @@ export async function extractFromPdf(buffer) {
   if (ocr.extractedText) {
     return completeExtraction({
       ...ocr,
+      source: parsed.text.trim().length > 0 ? "hybrid" : "ocr",
       processingTime: Date.now() - startedAt
     });
   }
@@ -58,7 +59,7 @@ export async function extractFromPdf(buffer) {
       parser: "failed",
       wordCount: 0,
       parserError: ocr.parserError || parsed.error?.message,
-      source: "ocr",
+      source: parsed.text.trim().length > 0 ? "hybrid" : "ocr",
       processingTime: Date.now() - startedAt
     })
   };
@@ -102,14 +103,23 @@ async function runPdfOCR(buffer, fallbackPages, parserError) {
     const pages = pdfDocument.numPages || fallbackPages || 0;
     const pageNumbers = Array.from({ length: pages }, (_value, index) => index + 1);
     const pageTexts = await withConcurrencyLimit(pageNumbers, OCR_CONCURRENCY, async (pageNumber) => {
-      const page = await pdfDocument.getPage(pageNumber);
+      let page = null;
+
       try {
+        page = await pdfDocument.getPage(pageNumber);
         const imageBuffer = await renderPdfPageToPngBuffer(page);
         const text = await ocrService.extractPdfPageText(imageBuffer);
         return normalizeWhitespace(text);
+      } catch (error) {
+        console.error("OCR page failed", { page: pageNumber, error });
+        return "";
       } finally {
-        if (typeof page.cleanup === "function") {
-          page.cleanup();
+        try {
+          if (page && typeof page.cleanup === "function") {
+            page.cleanup();
+          }
+        } catch {
+          // Ignore cleanup failures.
         }
       }
     });
