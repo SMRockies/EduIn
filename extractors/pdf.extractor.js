@@ -14,11 +14,12 @@ const PDF_MIN_TEXT_LENGTH = Number(process.env.PDF_MIN_TEXT_LENGTH ?? 100);
 
 export async function extractFromPdf(buffer) {
   const startedAt = Date.now();
-  console.log("PDF detected", { bytes: buffer?.length || 0 });
+  const pdfBytes = buffer instanceof Uint8Array ? buffer : new Uint8Array(buffer);
+  console.log("PDF detected", { bytes: pdfBytes?.length || 0 });
 
   let pdfDocument = null;
   try {
-    pdfDocument = await loadPdfDocument(buffer);
+    pdfDocument = await loadPdfDocument(pdfBytes);
     console.log("PDF loaded");
   } catch (error) {
     console.error("Extraction failed", { stage: "load", error });
