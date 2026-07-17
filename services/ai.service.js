@@ -9,6 +9,17 @@ class AIService {
     const startTime = Date.now();
     
     console.log("Model:", model);
+    const payload = {
+      model,
+      messages,
+      temperature: options.temperature ?? openRouterConfig.defaults.temperature,
+      max_tokens: options.maxTokens ?? openRouterConfig.defaults.maxTokens
+    };
+
+    if (options.plugins?.length) {
+      payload.plugins = options.plugins;
+    }
+
     const response = await fetch(`${openRouterConfig.baseUrl}/chat/completions`, {
       method: "POST",
       headers: {
@@ -17,26 +28,33 @@ class AIService {
         "HTTP-Referer": "http://localhost:3000",
         "X-Title": "EduAI"
       },
-      body: JSON.stringify({
-        model,
-        messages,
-        temperature: options.temperature ?? openRouterConfig.defaults.temperature,
-        max_tokens: options.maxTokens ?? openRouterConfig.defaults.maxTokens
-      })
+      body: JSON.stringify(payload)
     });
 
     const latency = Date.now() - startTime;
+    const data = await response.json();
+    const annotations = data.choices?.[0]?.message?.annotations || data.error?.metadata?.file_annotations || [];
 
     if (!response.ok) {
-      const errorText = await response.text();
+      if (options.allowErrorAnnotations && annotations.length > 0) {
+        return {
+          content: data.choices?.[0]?.message?.content || "",
+          tokens: data.usage?.total_tokens || 0,
+          latency,
+          model,
+          annotations,
+          raw: data
+        };
+      }
+
+      const errorText = typeof data === "string" ? data : JSON.stringify(data);
       throw new Error(`OpenRouter API error (${response.status}): ${errorText}`);
     }
 
-    const data = await response.json();
     const content = data.choices?.[0]?.message?.content || "";
     const tokens = data.usage?.total_tokens || 0;
 
-    return { content, tokens, latency, model };
+    return { content, tokens, latency, model, annotations, raw: data };
   }
 
   async chat(input) {

@@ -1,5 +1,5 @@
 export const ocrConfig = {
-  provider: process.env.OCR_PROVIDER || "openrouter",
+  provider: process.env.OCR_PROVIDER || "tesseract",
   model: process.env.OCR_MODEL || process.env.VISION_MODEL || "openai/gpt-4o-mini"
 };
 
