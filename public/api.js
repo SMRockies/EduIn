@@ -27,13 +27,13 @@ export async function uploadFile(file) {
   return data;
 }
 
-export async function docAction(documentId, action) {
-  const data = await post(`/documents/${action}`, { documentId });
+export async function docAction(documentId, action, document = null) {
+  const data = await post(`/documents/${action}`, { documentId, document });
   return data?.data?.output || "No response received";
 }
 
-export async function docAsk(documentId, question) {
-  const data = await post("/documents/ask", { documentId, question });
+export async function docAsk(documentId, question, document = null) {
+  const data = await post("/documents/ask", { documentId, document, question });
   return data?.data?.output || "No response received";
 }
 

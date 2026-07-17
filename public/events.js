@@ -37,6 +37,7 @@ async function handleAction(type) {
 }
 
 let currentDocId = null;
+let currentDocument = null;
 
 const fileInput = document.getElementById("fileInput");
 const uploadBtn = document.getElementById("uploadBtn");
@@ -57,9 +58,11 @@ uploadBtn.addEventListener("click", async () => {
 
   try {
     const result = await uploadFile(file);
-    currentDocId = result.data.document.id;
-    showDocInfo(result.data.document);
-    setOutput(`**Document uploaded:** ${result.data.document.filename}\n\n${result.data.message}`, false);
+    currentDocument = result.data.document;
+    currentDocId = currentDocument.id;
+    showDocInfo(currentDocument);
+    sessionStorage.setItem("eduaiCurrentDocument", JSON.stringify(currentDocument));
+    setOutput(`**Document uploaded:** ${currentDocument.filename}\n\n${result.data.message}`, false);
     setStatus("Done");
     clearFileInput();
   } catch (error) {
@@ -77,7 +80,7 @@ document.querySelectorAll(".doc-action").forEach(btn => {
     setDocStatus("Processing...");
     setDocButtonsDisabled(true);
     try {
-      const response = await docAction(currentDocId, action);
+      const response = await docAction(currentDocId, action, currentDocument);
       setOutput(response);
       setStatus("Done");
       setDocStatus("Ready");
@@ -97,7 +100,7 @@ document.getElementById("askBtn").addEventListener("click", async () => {
   setDocStatus("Processing...");
   setDocButtonsDisabled(true);
   try {
-    const response = await docAsk(currentDocId, question);
+    const response = await docAsk(currentDocId, question, currentDocument);
     setOutput(response);
     setStatus("Done");
     setDocStatus("Ready");
@@ -109,3 +112,17 @@ document.getElementById("askBtn").addEventListener("click", async () => {
     setDocButtonsDisabled(false);
   }
 });
+
+const savedDocument = sessionStorage.getItem("eduaiCurrentDocument");
+if (savedDocument) {
+  try {
+    currentDocument = JSON.parse(savedDocument);
+    currentDocId = currentDocument?.id || null;
+    if (currentDocument?.id) {
+      showDocInfo(currentDocument);
+      setDocStatus("Ready");
+    }
+  } catch {
+    sessionStorage.removeItem("eduaiCurrentDocument");
+  }
+}

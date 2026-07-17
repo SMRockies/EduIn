@@ -20,14 +20,14 @@ export class Document {
     return chunks;
   }
 
-  toJSON() {
+  toJSON({ includeFullText = false } = {}) {
     return {
       id: this.id,
       filename: this.filename,
       mimeType: this.mimeType,
       pages: this.pages,
       wordCount: this.wordCount,
-      extractedText: this.extractedText.substring(0, 200) + "...",
+      extractedText: includeFullText ? this.extractedText : this.extractedText.substring(0, 200) + "...",
       metadata: this.metadata
     };
   }
