@@ -28,7 +28,6 @@
     "jszip": "^3.10.1",
     "mammoth": "^1.12.0",
     "multer": "^2.2.0",
-    "pdf-parse": "^2.4.5",
     "pdfjs-dist": "^6.1.200",
     "pptx-svg": "^0.6.4",
     "pptxgenjs": "^4.0.1",

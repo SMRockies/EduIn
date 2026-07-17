@@ -27,7 +27,9 @@ export function buildMetadata({
   wordCount,
   parserError,
   source,
-  processingTime
+  processingTime,
+  pdfInfo,
+  pdfMetadata
 }) {
   return {
     pages: pages || 0,
@@ -36,7 +38,9 @@ export function buildMetadata({
     wordCount: wordCount || 0,
     parserError,
     source,
-    processingTime
+    processingTime,
+    pdfInfo,
+    pdfMetadata
   };
 }
 
@@ -53,4 +57,59 @@ export function withConcurrencyLimit(items, limit, worker) {
   });
 
   return Promise.all(runners).then(() => results);
+}
+
+export function splitVisibleLines(text) {
+  return normalizeWhitespace(text)
+    .split("\n")
+    .map((line) => line.trim())
+    .filter(Boolean);
+}
+
+export function dedupeLines(lines) {
+  const seen = new Set();
+  const result = [];
+
+  for (const line of lines) {
+    const normalized = normalizeLine(line);
+    if (!normalized || seen.has(normalized)) continue;
+    seen.add(normalized);
+    result.push(line.trim());
+  }
+
+  return result;
+}
+
+export function mergePageBlocks(pageBlocks) {
+  return pageBlocks
+    .map((block) => formatPageBlock(block))
+    .filter(Boolean)
+    .join("\n\n");
+}
+
+function formatPageBlock({ pageNumber, digitalText = "", ocrText = "" }) {
+  const lines = [`Page ${pageNumber}`];
+  const digitalLines = splitVisibleLines(digitalText);
+  const ocrLines = splitVisibleLines(ocrText);
+
+  if (digitalLines.length > 0) {
+    lines.push(...digitalLines);
+  }
+
+  if (ocrLines.length > 0) {
+    if (digitalLines.length > 0) {
+      lines.push("(OCR)");
+    }
+    lines.push(...ocrLines);
+  }
+
+  const merged = dedupeLines(lines);
+  return merged.length > 1 ? merged.join("\n") : "";
+}
+
+function normalizeLine(line) {
+  return String(line || "")
+    .replace(/\s+/g, " ")
+    .trim()
+    .toLowerCase();
 }
