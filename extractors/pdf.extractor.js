@@ -11,9 +11,7 @@ import { loadPdfDocument, renderPdfPageToPngBuffer } from "../renderers/pdf.rend
 import { ocrService } from "../services/ocr.service.js";
 
 const require = createRequire(import.meta.url);
-const pdfParseModule = require("pdf-parse");
-const PdfParseClass = pdfParseModule.PDFParse || null;
-
+const pdfParse = require("pdf-parse");
 const OCR_CONCURRENCY = 3;
 const PDF_MIN_TEXT_LENGTH = Number(process.env.PDF_MIN_TEXT_LENGTH ?? 100);
 
@@ -30,15 +28,15 @@ export async function extractFromPdf(buffer) {
     return finishExtraction({
       extractedText: normalizeWhitespace(parsed.text),
       pages: parsed.pages,
-      parser: parsed.parser,
+      parser: "pdf-parse",
       ocrUsed: false,
-      parserError: parsed.error?.message,
+      parserError: parsed.error?.message || null,
       source: "digital",
       processingTime: Date.now() - startedAt
     });
   }
 
-  const ocr = await runPdfOCR(buffer, parsed);
+  const ocr = await runPdfOCR(buffer, parsed.error);
   if (ocr.extractedText) {
     return finishExtraction({
       ...ocr,
@@ -48,19 +46,19 @@ export async function extractFromPdf(buffer) {
   }
 
   console.error("Extraction failed", {
-    pages: parsed.pages || ocr.pages || 0,
+    pages: ocr.pages || 0,
     parserError: ocr.parserError || parsed.error?.message || null
   });
 
   return {
     extractedText: "",
-    pages: parsed.pages || ocr.pages || 0,
+    pages: ocr.pages || 0,
     metadata: buildMetadata({
-      pages: parsed.pages || ocr.pages || 0,
+      pages: ocr.pages || 0,
       ocrUsed: true,
       parser: "failed",
       wordCount: 0,
-      parserError: ocr.parserError || parsed.error?.message,
+      parserError: ocr.parserError || parsed.error?.message || null,
       source: parsed.text.trim() ? "hybrid" : "ocr",
       processingTime: Date.now() - startedAt
     })
@@ -68,51 +66,8 @@ export async function extractFromPdf(buffer) {
 }
 
 async function parsePdf(buffer) {
-  if (PdfParseClass) {
-    return parsePdfWithModernApi(buffer);
-  }
-
-  return parsePdfWithLegacyApi(buffer);
-}
-
-async function parsePdfWithModernApi(buffer) {
-  const parser = new PdfParseClass({ data: buffer });
-
   try {
-    const [textResult, infoResult] = await Promise.all([
-      parser.getText(),
-      parser.getInfo().catch(() => null)
-    ]);
-
-    const text = normalizeWhitespace(textResult?.text || "");
-    const pages = infoResult?.total || textResult?.total || 0;
-
-    console.log("Parser succeeded", { pages });
-    console.log("Characters extracted", { characters: countMeaningfulCharacters(text) });
-
-    await destroyParser(parser);
-
-    return {
-      text,
-      pages,
-      parser: "pdf-parse-v2",
-      parserHandle: null,
-      error: null
-    };
-  } catch (error) {
-    return {
-      text: "",
-      pages: 0,
-      parser: "pdf-parse-v2",
-      parserHandle: parser,
-      error
-    };
-  }
-}
-
-async function parsePdfWithLegacyApi(buffer) {
-  try {
-    const result = await pdfParseModule(buffer);
+    const result = await pdfParse(buffer);
     const text = normalizeWhitespace(result?.text || "");
     const pages = result?.numpages || 0;
 
@@ -122,40 +77,67 @@ async function parsePdfWithLegacyApi(buffer) {
     return {
       text,
       pages,
-      parser: "pdf-parse-v1",
-      parserHandle: null,
       error: null
     };
   } catch (error) {
     return {
       text: "",
       pages: 0,
-      parser: "pdf-parse-v1",
-      parserHandle: null,
       error
     };
   }
 }
 
-async function runPdfOCR(buffer, parsed) {
-  console.log("OCR started", { pages: parsed.pages || 0 });
+async function runPdfOCR(buffer, parserError) {
+  let pdfDocument;
 
   try {
-    const pageCount = await getPageCount(buffer, parsed);
+    pdfDocument = await loadPdfDocument(buffer);
+  } catch (error) {
+    console.error("OCR failed", error);
+    return {
+      extractedText: "",
+      pages: 0,
+      parser: "ocr",
+      ocrUsed: true,
+      wordCount: 0,
+      parserError: parserError?.message || error.message || null,
+      source: "ocr"
+    };
+  }
+
+  try {
+    const pageCount = pdfDocument.numPages || 0;
+    console.log("OCR started", { pages: pageCount });
+
     const pageNumbers = Array.from({ length: pageCount }, (_value, index) => index + 1);
     const pageTexts = await withConcurrencyLimit(pageNumbers, OCR_CONCURRENCY, async (pageNumber) => {
+      let page = null;
+
       try {
-        const imageBuffer = await renderPdfPageImage(buffer, parsed, pageNumber);
+        page = await pdfDocument.getPage(pageNumber);
+        const imageBuffer = await renderPdfPageToPngBuffer(page);
         const text = await ocrService.extractPdfPageText(imageBuffer);
         return normalizeWhitespace(text);
       } catch (error) {
         console.error("OCR page failed", { page: pageNumber, error });
         return "";
+      } finally {
+        if (page && typeof page.cleanup === "function") {
+          try {
+            page.cleanup();
+          } catch {
+            // Ignore cleanup failures.
+          }
+        }
       }
     });
 
     const extractedText = normalizeWhitespace(pageTexts.filter(Boolean).join("\n\n"));
-    console.log("OCR finished", { pages: pageCount, characters: countMeaningfulCharacters(extractedText) });
+    console.log("OCR finished", {
+      pages: pageCount,
+      characters: countMeaningfulCharacters(extractedText)
+    });
 
     if (!extractedText) {
       return {
@@ -164,7 +146,7 @@ async function runPdfOCR(buffer, parsed) {
         parser: "ocr",
         ocrUsed: true,
         wordCount: 0,
-        parserError: parsed.error?.message || null,
+        parserError: parserError?.message || null,
         source: "ocr"
       };
     }
@@ -175,63 +157,27 @@ async function runPdfOCR(buffer, parsed) {
       parser: "ocr",
       ocrUsed: true,
       wordCount: countWords(extractedText),
-      parserError: parsed.error?.message || null,
+      parserError: parserError?.message || null,
+      source: "ocr"
+    };
+  } catch (error) {
+    console.error("OCR failed", error);
+    return {
+      extractedText: "",
+      pages: pdfDocument.numPages || 0,
+      parser: "ocr",
+      ocrUsed: true,
+      wordCount: 0,
+      parserError: parserError?.message || error.message || null,
       source: "ocr"
     };
   } finally {
-    await destroyParser(parsed.parserHandle);
-  }
-}
-
-async function getPageCount(buffer, parsed) {
-  if (parsed.pages && parsed.pages > 0) {
-    return parsed.pages;
-  }
-
-  if (!parsed.parserHandle?.getInfo) {
-    return 0;
-  }
-
-  try {
-    const info = await parsed.parserHandle.getInfo().catch(() => null);
-    return info?.total || 0;
-  } catch {
-    return 0;
-  }
-}
-
-async function renderPdfPageImage(buffer, parsed, pageNumber) {
-  if (parsed.parserHandle?.getScreenshot) {
-    const result = await parsed.parserHandle.getScreenshot({
-      partial: [pageNumber],
-      imageBuffer: true,
-      imageDataUrl: false
-    });
-
-    const page = result?.pages?.[0];
-    const data = page?.data || page?.imageBuffer || page?.buffer;
-    if (data) {
-      return Buffer.isBuffer(data) ? data : Buffer.from(data);
-    }
-  }
-
-  const pdfDocument = await loadPdfDocument(buffer);
-  try {
-    const page = await pdfDocument.getPage(pageNumber);
-    return await renderPdfPageToPngBuffer(page);
-  } finally {
     if (typeof pdfDocument.destroy === "function") {
-      await pdfDocument.destroy();
-    }
-  }
-}
-
-async function destroyParser(parserHandle) {
-  if (parserHandle && typeof parserHandle.destroy === "function") {
-    try {
-      await parserHandle.destroy();
-    } catch {
-      // Ignore cleanup failures.
+      try {
+        await pdfDocument.destroy();
+      } catch {
+        // Ignore cleanup failures.
+      }
     }
   }
 }
