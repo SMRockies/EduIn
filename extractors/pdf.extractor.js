@@ -14,7 +14,7 @@ const PDF_MIN_TEXT_LENGTH = Number(process.env.PDF_MIN_TEXT_LENGTH ?? 100);
 
 export async function extractFromPdf(buffer) {
   const startedAt = Date.now();
-  const pdfBytes = buffer instanceof Uint8Array ? buffer : new Uint8Array(buffer);
+  const pdfBytes = new Uint8Array(buffer);
   console.log("PDF detected", { bytes: pdfBytes?.length || 0 });
 
   let pdfDocument = null;

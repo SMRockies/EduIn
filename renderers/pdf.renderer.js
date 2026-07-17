@@ -9,7 +9,7 @@ const pdfjsLibPromise = import(pathToFileURL(pdfjsPath).href);
 export async function loadPdfDocument(buffer) {
   const pdfjsLib = await pdfjsLibPromise;
   const loadingTask = pdfjsLib.getDocument({
-    data: buffer instanceof Uint8Array ? buffer : new Uint8Array(buffer),
+    data: new Uint8Array(buffer),
     stopAtErrors: false,
     disableRange: true,
     disableStream: true,
