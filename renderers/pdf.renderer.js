@@ -4,10 +4,16 @@ import { createCanvas } from "@napi-rs/canvas";
 
 const require = createRequire(import.meta.url);
 const pdfjsPath = require.resolve("pdfjs-dist/legacy/build/pdf.mjs");
+const pdfjsWorkerPath = require.resolve("pdfjs-dist/build/pdf.worker.min.mjs");
 const pdfjsLibPromise = import(pathToFileURL(pdfjsPath).href);
+const pdfjsWorkerSrc = pathToFileURL(pdfjsWorkerPath).href;
 
 export async function loadPdfDocument(buffer) {
   const pdfjsLib = await pdfjsLibPromise;
+  if (pdfjsLib?.GlobalWorkerOptions) {
+    pdfjsLib.GlobalWorkerOptions.workerSrc = pdfjsWorkerSrc;
+  }
+
   const loadingTask = pdfjsLib.getDocument({
     data: new Uint8Array(buffer),
     stopAtErrors: false,
