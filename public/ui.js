@@ -67,9 +67,11 @@ export function clearDocQuestion() {
 }
 
 export function setDocButtonsDisabled(disabled) {
-  document.querySelectorAll(".doc-action, #askBtn, #uploadBtn").forEach(b => b.disabled = disabled);
+  document.querySelectorAll(".doc-action, #askBtn, #uploadBtn, #browseBtn, #captureBtn").forEach(b => b.disabled = disabled);
 }
 
 export function clearFileInput() {
   document.getElementById("fileInput").value = "";
+  const cameraInput = document.getElementById("cameraInput");
+  if (cameraInput) cameraInput.value = "";
 }

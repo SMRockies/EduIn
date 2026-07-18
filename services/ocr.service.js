@@ -10,6 +10,10 @@ let tesseractWorkerPromise = null;
 let tesseractQueue = Promise.resolve();
 
 export class OcrService {
+  async extractImageText(imageBuffer) {
+    return this.runTesseract(imageBuffer);
+  }
+
   async extractPdfPageText(imageBuffer) {
     return this.runTesseract(imageBuffer);
   }

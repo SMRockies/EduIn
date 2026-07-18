@@ -278,22 +278,16 @@ button:disabled {
   display: none;
 }
 
-.file-label {
-  display: inline-flex;
-  align-items: center;
-  padding: 13px 18px;
-  background: var(--secondary);
-  color: var(--primary-dark);
-  border-radius: 14px;
-  font-weight: 700;
-  cursor: pointer;
-  transition: background 0.2s ease;
+.upload-actions {
+  display: flex;
   flex: 1;
-  min-width: 160px;
+  flex-wrap: wrap;
+  gap: 12px;
 }
 
-.file-label:hover {
-  background: #dce6ff;
+.upload-actions button {
+  flex: 1;
+  min-width: 150px;
 }
 
 .doc-info {

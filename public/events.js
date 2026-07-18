@@ -6,6 +6,8 @@ import {
 } from "./ui.js";
 
 const MAX_UPLOAD_BYTES = 4 * 1024 * 1024;
+const USE_UPLOAD_LIMIT = window.location.hostname.includes("vercel.app");
+const EFFECTIVE_MAX_UPLOAD_BYTES = USE_UPLOAD_LIMIT ? MAX_UPLOAD_BYTES : Infinity;
 
 document.getElementById("askAiBtn").addEventListener("click", () => handleAction("askAi"));
 document.getElementById("summarizeBtn").addEventListener("click", () => handleAction("summarize"));
@@ -40,28 +42,30 @@ async function handleAction(type) {
 
 let currentDocId = null;
 let currentDocument = null;
+let selectedFile = null;
 
 const fileInput = document.getElementById("fileInput");
+const cameraInput = document.getElementById("cameraInput");
+const browseBtn = document.getElementById("browseBtn");
+const captureBtn = document.getElementById("captureBtn");
 const uploadBtn = document.getElementById("uploadBtn");
 
+browseBtn.addEventListener("click", () => fileInput.click());
+captureBtn.addEventListener("click", () => cameraInput.click());
+
 fileInput.addEventListener("change", () => {
-  uploadBtn.disabled = !fileInput.files.length;
-  if (fileInput.files.length) {
-    const selected = fileInput.files[0];
-    if (selected.size > MAX_UPLOAD_BYTES) {
-      setDocStatus(`File too large. Upload a PDF under 4MB.`);
-      uploadBtn.disabled = true;
-      return;
-    }
-    setDocStatus(`Selected: ${selected.name}`);
-  }
+  handleSelectedFiles(fileInput.files);
+});
+
+cameraInput.addEventListener("change", () => {
+  handleSelectedFiles(cameraInput.files);
 });
 
 uploadBtn.addEventListener("click", async () => {
-  const file = fileInput.files[0];
+  const file = selectedFile;
   if (!file) return;
 
-  if (file.size > MAX_UPLOAD_BYTES) {
+  if (file.size > EFFECTIVE_MAX_UPLOAD_BYTES) {
     setOutput("Upload error: File too large for this deployment. Please upload a PDF under 4MB.", true);
     setDocStatus("File too large");
     return;
@@ -78,6 +82,7 @@ uploadBtn.addEventListener("click", async () => {
     sessionStorage.setItem("eduaiCurrentDocument", JSON.stringify(currentDocument));
     setOutput(`**Document uploaded:** ${currentDocument.filename}\n\n${result.data.message}`, false);
     setStatus("Done");
+    selectedFile = null;
     clearFileInput();
   } catch (error) {
     setOutput(`Upload error: ${error.message}`, true);
@@ -126,6 +131,24 @@ document.getElementById("askBtn").addEventListener("click", async () => {
     setDocButtonsDisabled(false);
   }
 });
+
+function handleSelectedFiles(files) {
+  selectedFile = files?.[0] || null;
+  uploadBtn.disabled = !selectedFile;
+
+  if (!selectedFile) {
+    setDocStatus("No file");
+    return;
+  }
+
+  if (selectedFile.size > EFFECTIVE_MAX_UPLOAD_BYTES) {
+    setDocStatus(USE_UPLOAD_LIMIT ? "File too large. Upload a file under 4MB." : `Selected: ${selectedFile.name}`);
+    uploadBtn.disabled = USE_UPLOAD_LIMIT;
+    return;
+  }
+
+  setDocStatus(`Selected: ${selectedFile.name}`);
+}
 
 const savedDocument = sessionStorage.getItem("eduaiCurrentDocument");
 if (savedDocument) {

@@ -1,3 +1,5 @@
+import { MAX_UPLOAD_MB } from "./upload.middleware.js";
+
 export function errorHandler(err, req, res, next) {
   console.error(`[${new Date().toISOString()}] Error:`, err.message);
   
@@ -35,9 +37,10 @@ export function errorHandler(err, req, res, next) {
   }
 
   if (err.code === "LIMIT_FILE_SIZE") {
+    const maxMb = MAX_UPLOAD_MB || 4;
     return res.status(413).json({
       success: false,
-      message: "File too large for this deployment. Please upload a PDF under 4MB.",
+      message: `File too large for this deployment. Please upload a file under ${maxMb}MB.`,
       error: "FILE_TOO_LARGE"
     });
   }
