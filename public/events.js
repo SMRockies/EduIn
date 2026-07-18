@@ -5,6 +5,8 @@ import {
   setDocButtonsDisabled, clearFileInput
 } from "./ui.js";
 
+const MAX_UPLOAD_BYTES = 4 * 1024 * 1024;
+
 document.getElementById("askAiBtn").addEventListener("click", () => handleAction("askAi"));
 document.getElementById("summarizeBtn").addEventListener("click", () => handleAction("summarize"));
 document.getElementById("quizBtn").addEventListener("click", () => handleAction("quiz"));
@@ -45,13 +47,25 @@ const uploadBtn = document.getElementById("uploadBtn");
 fileInput.addEventListener("change", () => {
   uploadBtn.disabled = !fileInput.files.length;
   if (fileInput.files.length) {
-    setDocStatus(`Selected: ${fileInput.files[0].name}`);
+    const selected = fileInput.files[0];
+    if (selected.size > MAX_UPLOAD_BYTES) {
+      setDocStatus(`File too large. Upload a PDF under 4MB.`);
+      uploadBtn.disabled = true;
+      return;
+    }
+    setDocStatus(`Selected: ${selected.name}`);
   }
 });
 
 uploadBtn.addEventListener("click", async () => {
   const file = fileInput.files[0];
   if (!file) return;
+
+  if (file.size > MAX_UPLOAD_BYTES) {
+    setOutput("Upload error: File too large for this deployment. Please upload a PDF under 4MB.", true);
+    setDocStatus("File too large");
+    return;
+  }
 
   setDocStatus("Uploading...");
   setDocButtonsDisabled(true);

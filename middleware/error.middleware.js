@@ -37,7 +37,7 @@ export function errorHandler(err, req, res, next) {
   if (err.code === "LIMIT_FILE_SIZE") {
     return res.status(413).json({
       success: false,
-      message: "File too large. Maximum size is 10MB.",
+      message: "File too large for this deployment. Please upload a PDF under 4MB.",
       error: "FILE_TOO_LARGE"
     });
   }
@@ -52,7 +52,7 @@ export function errorHandler(err, req, res, next) {
 
   return res.status(500).json({
     success: false,
-    message: "OpenRouter unavailable. Please try again later.",
+    message: "Document processing failed. Please try a smaller file or try again later.",
     error: "SERVICE_UNAVAILABLE",
     retry: true
   });
