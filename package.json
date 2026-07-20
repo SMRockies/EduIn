@@ -4,6 +4,9 @@
   "description": "EduAI - AI Powered Learning Assistant for Semester 6 ESD project",
   "type": "module",
   "main": "server.js",
+  "engines": {
+    "node": ">=20"
+  },
   "scripts": {
     "start": "node server.js",
     "dev": "node server.js"

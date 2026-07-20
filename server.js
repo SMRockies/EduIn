@@ -16,12 +16,50 @@ const PORT = process.env.PORT || 3000;
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const publicDir = path.join(__dirname, "public");
+const allowedOrigins = (process.env.CORS_ORIGIN || process.env.FRONTEND_ORIGIN || "")
+  .split(",")
+  .map((origin) => origin.trim())
+  .filter(Boolean);
 
-app.use(cors());
+function createCorsOptions() {
+  return {
+    origin(origin, cb) {
+      if (!origin || allowedOrigins.length === 0 || allowedOrigins.includes(origin)) {
+        return cb(null, true);
+      }
+
+      return cb(null, false);
+    },
+    credentials: true
+  };
+}
+
+function logStartupBanner() {
+  console.log(`EduAI server running on http://localhost:${PORT}`);
+  if (allowedOrigins.length > 0) {
+    console.log(`CORS allowed origins: ${allowedOrigins.join(", ")}`);
+  } else {
+    console.log("CORS allowed origins: all origins (configure CORS_ORIGIN to restrict)");
+  }
+}
+
+app.disable("x-powered-by");
+app.set("trust proxy", 1);
+app.use(cors(createCorsOptions()));
+app.options("*", cors(createCorsOptions()));
 app.use(express.json({ limit: "10mb" }));
 app.use(express.urlencoded({ extended: true, limit: "10mb" }));
 app.use(express.static(publicDir));
 app.use(requestLogger);
+
+app.get("/health", (_req, res) => {
+  res.json({
+    success: true,
+    service: "EduAI",
+    status: "ok",
+    uptime: process.uptime()
+  });
+});
 
 app.use("/api", aiRoutes);
 app.use("/api/documents", documentRoutes);
@@ -32,6 +70,15 @@ app.get("/", (_req, res) => {
 
 app.use(errorHandler);
 
-app.listen(PORT, () => {
-  console.log(`EduAI server running on http://localhost:${PORT}`);
-});
+const server = app.listen(PORT, logStartupBanner);
+
+function shutdown(signal) {
+  console.log(`Received ${signal}. Shutting down EduAI server...`);
+  server.close(() => {
+    console.log("EduAI server stopped.");
+    process.exit(0);
+  });
+}
+
+process.on("SIGINT", () => shutdown("SIGINT"));
+process.on("SIGTERM", () => shutdown("SIGTERM"));
