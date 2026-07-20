@@ -1,0 +1,11 @@
+.git
+.github
+.npm-cache
+node_modules
+.env
+.env.local
+.env.development
+.env.production
+uploads
+tmp
+*.log

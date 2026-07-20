@@ -2,19 +2,20 @@
 
 ## Goal
 
-Move the EduAI backend away from Vercel serverless execution and onto a persistent Node.js host so the app behaves like the local development environment.
+Move the EduAI backend away from Vercel serverless execution and onto a persistent Cloudflare runtime so the app behaves as closely as possible to the local development environment.
 
 ## Hosting Choice
 
-Render is the recommended Phase 1 target.
+Cloudflare Containers is the recommended Phase 1 target.
 
-Why Render:
+Why Cloudflare Containers:
 
 - The app already runs as a standard Express server.
 - The document pipeline depends on native Node libraries and long-lived in-memory processing.
-- Render supports persistent web services, multipart uploads, and large request bodies more naturally than Vercel serverless functions.
+- Cloudflare Containers can run code written in any runtime and support applications that need a full filesystem or Linux-like environment.
+- The existing upload path can remain intact because the container can run the current Node server directly.
 
-Cloudflare Workers is not a good Phase 1 fit for this codebase because the current backend relies on Node APIs and native dependencies that would require a much larger rewrite.
+Cloudflare Workers or Pages Functions alone are not a good Phase 1 fit for this codebase because the current backend relies on Node APIs and native dependencies that would require a much larger rewrite.
 
 ## What Changed
 
@@ -35,17 +36,21 @@ Added support for:
 - `CORS_ORIGIN`
 - `FRONTEND_ORIGIN`
 
-If the frontend and backend are deployed separately, set the frontend origin explicitly in the environment. If they are deployed together on the same Render service, no frontend URL change is needed.
+If the frontend and backend are deployed separately, set the frontend origin explicitly in the environment. If they are deployed together through the same Cloudflare-backed origin, no frontend URL change is needed.
 
-### 3. Render deployment manifest
+### 3. Cloudflare deployment config
 
-Added [`render.yaml`](../render.yaml) so the service can be deployed as a persistent Node web service.
+Added [`wrangler.toml`](../wrangler.toml) plus a [`Dockerfile`](../Dockerfile) so the app can be deployed as a Cloudflare Container-backed service.
 
-### 4. Engine hint
+### 4. Worker entrypoint
+
+Added [`worker.js`](../worker.js) as the Cloudflare Worker entrypoint that forwards requests to the container.
+
+### 5. Engine hint
 
 Added a Node engine hint in [`package.json`](../package.json) to make the supported runtime explicit.
 
-### 5. Environment example
+### 6. Environment example
 
 Updated [`.env.example`](../.env.example) to include the CORS origin setting used by the migration.
 
@@ -65,17 +70,13 @@ This phase is infrastructure-only.
 ## Deployment Steps
 
 1. Push the repository to GitHub.
-2. Create a new Render Web Service from the repo.
-3. Let Render use the included `render.yaml`, or set these values manually:
-   - `buildCommand: npm install`
-   - `startCommand: npm start`
-   - `healthCheckPath: /health`
-4. Add environment variables in Render:
+2. Create a new Cloudflare Workers + Containers project, or connect the repo to an existing Cloudflare deployment workflow.
+3. Ensure Docker is running locally for the first `wrangler deploy` (`docker info` should succeed).
+4. Add environment variables in Cloudflare:
    - `OPENROUTER_API_KEY`
-   - `PORT` is handled by Render automatically
    - `CORS_ORIGIN` if the frontend is hosted separately
    - `MAX_UPLOAD_MB` if you want a deployment-specific upload cap
-5. Deploy the service.
+5. Deploy with `npx wrangler deploy`.
 
 ## Verification Checklist
 
@@ -87,7 +88,7 @@ This phase is infrastructure-only.
 - PPTX upload works
 - image upload works
 - summarize, explain, ask, and quiz actions still work
-- large uploads are accepted within the Render plan limits
+- large uploads are accepted within the Cloudflare request body limit for the selected plan
 - multiple consecutive uploads continue working
 
 ## Notes
@@ -95,3 +96,4 @@ This phase is infrastructure-only.
 - The migration does not introduce new document-processing features.
 - The frontend can continue using same-origin requests when it is served by the backend.
 - If the frontend is split out later, only `CORS_ORIGIN` and the frontend API base need to be updated.
+- Cloudflare Workers free and paid plans currently allow request bodies up to 100 MB, which is enough for the phase 1 target of files larger than Vercel's limit.
