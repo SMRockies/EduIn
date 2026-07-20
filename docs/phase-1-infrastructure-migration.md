@@ -13,7 +13,7 @@ Why Cloudflare Containers:
 - The app already runs as a standard Express server.
 - The document pipeline depends on native Node libraries and long-lived in-memory processing.
 - Cloudflare Containers can run code written in any runtime and support applications that need a full filesystem or Linux-like environment.
-- The existing upload path can remain intact because the container can run the current Node server directly.
+- The existing upload path can likely remain intact because the container can run the current Node server directly, but upload size, timeout behavior, and resource allocation should still be validated in the deployed Cloudflare setup.
 
 Cloudflare Workers or Pages Functions alone are not a good Phase 1 fit for this codebase because the current backend relies on Node APIs and native dependencies that would require a much larger rewrite.
 
@@ -81,6 +81,8 @@ This phase is infrastructure-only.
 ## Verification Checklist
 
 - `GET /health` returns `200`
+- startup logs show that Express is listening
+- environment variables load successfully
 - PDF upload works for normal digital PDFs
 - scanned PDF fallback still works
 - DOCX upload works
@@ -90,6 +92,26 @@ This phase is infrastructure-only.
 - summarize, explain, ask, and quiz actions still work
 - large uploads are accepted within the Cloudflare request body limit for the selected plan
 - multiple consecutive uploads continue working
+
+## Rollback
+
+If deployment fails, redeploy the last known working Vercel version while investigating the Cloudflare container configuration.
+
+No application code migration or data migration is required to roll back.
+
+## Phase 2 And Beyond
+
+The following items are intentionally deferred to later phases:
+
+- R2 object storage
+- background OCR jobs
+- streaming uploads
+- persistent caching
+- queue-based processing
+- progress tracking
+- authentication
+
+These are future architecture improvements, not part of Phase 1.
 
 ## Notes
 
